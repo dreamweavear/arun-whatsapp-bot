@@ -1,0 +1,37 @@
+version: 1
+
+providers:
+  - node
+
+phases:
+  setup:
+    nixPkgs:
+      # Essential packages for WhatsApp Web
+      - nss
+      - nspr
+      - atk
+      - at-spi2-atk
+      - cups
+      - dbus
+      - gtk3
+      - xorg.libX11
+      - xorg.libxcb
+      - xorg.libXcomposite
+      - xorg.libXdamage
+      - xorg.libXext
+      - xorg.libXfixes
+      - xorg.libXi
+      - xorg.libXrandr
+      - alsa-lib
+      - pango
+      - cairo
+      - libdrm
+      - mesa
+      # Lightweight chromium dependencies
+      - chromium
+  install:
+    cmds:
+      - npm install --production
+  build:
+    cmds:
+      - echo "✅ Build completed for WhatsApp Bot"
