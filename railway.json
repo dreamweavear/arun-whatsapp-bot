@@ -6,9 +6,10 @@
   },
   "deploy": {
     "numReplicas": 1,
-    "startCommand": "node server.js",
-    "healthcheckPath": "/ping",
-    "restartPolicyType": "ON_FAILURE",
+    "startCommand": "node server.js",  // 👈 Memory limit HATAO
+    "healthcheckPath": "/",  // 👈 /ping se / par change karein
+    "healthcheckTimeout": 60,  // 👈 YEH ADD KAREN
+    "restartPolicyType": "ON_FAILURE",  // 👈 ALWAYS se change
     "restartPolicyMaxRetries": 3
   }
 }
