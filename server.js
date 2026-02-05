@@ -1,4 +1,4 @@
-// server.js - OPTIMIZED FOR RAILWAY
+// server.js - FIXED VERSION FOR RAILWAY
 const express = require('express');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
@@ -6,44 +6,38 @@ const qrcode = require('qrcode');
 const app = express();
 app.use(express.json());
 
-// Memory optimization
+// Simple variables
 let client = null;
 let qrCode = null;
 let isReady = false;
-let restartCount = 0;
 
-// Function to start WhatsApp with memory limits
+// Start WhatsApp
 function startWhatsApp() {
-    console.log(`🚀 Starting WhatsApp Bot (Attempt: ${restartCount + 1})`);
+    console.log('🚀 Starting WhatsApp Bot for Arun Computer...');
     
-    // Clear previous client if exists
+    // Clear old client
     if (client) {
-        try {
-            client.destroy();
-        } catch (e) {}
-        client = null;
+        try { client.destroy(); } catch(e) {}
     }
     
-    // Create new client with optimized settings
     client = new Client({
         authStrategy: new LocalAuth({
             clientId: "arun-computer",
-            dataPath: "./.wwebjs_auth"  // Smaller path
+            dataPath: "./.wwebjs_auth"
         }),
         puppeteer: {
             headless: true,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',  // Uses less memory
+                '--disable-dev-shm-usage',
                 '--disable-accelerated-2d-canvas',
-                '--no-first-run',
-                '--no-zygote',
-                '--single-process',  // Single process saves memory
                 '--disable-gpu',
-                '--max-old-space-size=256'  // Limit Node.js memory
+                '--no-zygote',
+                '--single-process'
             ],
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || 
+                           '/usr/bin/chromium'  // Railway compatible path
         },
         webVersionCache: {
             type: 'remote',
@@ -51,159 +45,89 @@ function startWhatsApp() {
         }
     });
 
-    // QR Code event
+    // QR Code
     client.on('qr', async (qr) => {
         console.log('📱 QR Code received');
         qrCode = await qrcode.toDataURL(qr);
-        console.log('✅ QR Code generated. Scan with WhatsApp.');
+        console.log('✅ QR Code ready for scan');
     });
 
-    // Ready event
+    // Ready
     client.on('ready', () => {
         isReady = true;
         console.log('✅ WhatsApp Connected! Bot is ready.');
-        restartCount = 0; // Reset restart count on success
-    });
-
-    // Disconnected event
-    client.on('disconnected', (reason) => {
-        console.log('❌ WhatsApp disconnected:', reason);
-        isReady = false;
-        
-        // Auto-restart after 5 seconds
-        setTimeout(() => {
-            if (restartCount < 3) { // Max 3 retries
-                restartCount++;
-                startWhatsApp();
-            }
-        }, 5000);
-    });
-
-    // Error event
-    client.on('auth_failure', (msg) => {
-        console.error('❌ Auth failure:', msg);
     });
 
     // Initialize
-    client.initialize().catch(err => {
-        console.error('❌ Initialization failed:', err);
-    });
+    client.initialize();
 }
 
-// Start WhatsApp
-startWhatsApp();
+// Start server first, then WhatsApp
+const PORT = process.env.PORT || 3000;
 
-// ========== API ENDPOINTS ==========
+app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📱 Memory: ${process.memoryUsage().rss / 1024 / 1024} MB`);
+    
+    // Start WhatsApp after server is ready
+    setTimeout(startWhatsApp, 2000);
+});
 
-// Health check (simple response)
+// ========== SIMPLE API ENDPOINTS ==========
+
 app.get('/', (req, res) => {
     res.json({ 
         app: 'Arun Computer WhatsApp Bot',
-        status: isReady ? 'Connected' : 'Connecting...',
-        memory: process.memoryUsage().rss / 1024 / 1024 + ' MB',
-        uptime: process.uptime() + ' seconds'
+        status: isReady ? 'Connected' : 'Waiting for QR Scan',
+        endpoint: {
+            status: '/status',
+            qr: '/qr',
+            send: 'POST /send (phone, message)'
+        }
     });
 });
 
-// Status endpoint
 app.get('/status', (req, res) => {
-    res.json({ 
-        ready: isReady,
-        qr_available: qrCode !== null,
-        restarts: restartCount
-    });
+    res.json({ ready: isReady });
 });
 
-// Get QR Code
 app.get('/qr', (req, res) => {
     if (qrCode) {
-        res.json({ qr: qrCode, ready: isReady });
+        res.json({ qr: qrCode });
     } else {
-        res.json({ 
-            qr: null, 
-            ready: false, 
-            message: 'QR Code generating. Wait 10 seconds and refresh.' 
-        });
+        res.json({ qr: null, message: 'QR generating... Refresh in 10s' });
     }
 });
 
-// Send message (with timeout)
 app.post('/send', async (req, res) => {
     try {
         const { phone, message } = req.body;
         
         if (!phone || !message) {
-            return res.status(400).json({
-                success: false,
-                error: 'Phone and message are required'
-            });
+            return res.status(400).json({ error: 'Phone and message required' });
         }
         
         if (!isReady) {
-            return res.status(400).json({
-                success: false,
-                error: 'WhatsApp is not connected. Scan QR code first.'
-            });
+            return res.status(400).json({ error: 'WhatsApp not connected' });
         }
         
-        // Format phone number (simple)
-        let formattedPhone = phone.toString().replace(/\D/g, '');
-        if (formattedPhone.startsWith('91') && formattedPhone.length > 10) {
-            formattedPhone = formattedPhone.substring(2);
+        // Clean phone number
+        let cleanPhone = phone.toString().replace(/\D/g, '');
+        if (cleanPhone.startsWith('91') && cleanPhone.length === 12) {
+            cleanPhone = cleanPhone.substring(2);
         }
         
-        const chatId = `${formattedPhone}@c.us`;
+        const chatId = `${cleanPhone}@c.us`;
+        await client.sendMessage(chatId, message);
         
-        console.log(`📤 Sending to: ${formattedPhone.substring(0, 3)}...`);
-        
-        // Send with timeout
-        const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Timeout after 10 seconds')), 10000);
-        });
-        
-        const sendPromise = client.sendMessage(chatId, message.substring(0, 1000)); // Limit message length
-        
-        await Promise.race([sendPromise, timeoutPromise]);
-        
-        console.log('✅ Message sent successfully');
-        
-        res.json({
-            success: true,
-            message: 'WhatsApp message sent successfully'
-        });
+        res.json({ success: true, to: cleanPhone });
         
     } catch (error) {
-        console.error('❌ Send Error:', error.message);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
+        res.status(500).json({ error: error.message });
     }
 });
 
 // Health check for Railway
-app.get('/health', (req, res) => {
-    const memoryUsage = process.memoryUsage();
-    const memoryMB = memoryUsage.rss / 1024 / 1024;
-    
-    res.json({
-        status: memoryMB < 400 ? 'healthy' : 'warning', // Alert if memory > 400MB
-        timestamp: new Date().toISOString(),
-        memory: Math.round(memoryMB) + ' MB',
-        uptime: Math.round(process.uptime()) + ' seconds',
-        whatsapp: isReady ? 'connected' : 'disconnected'
-    });
-});
-
-// Simple ping endpoint (for uptime robots)
 app.get('/ping', (req, res) => {
     res.send('pong');
-});
-
-// Start server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`🚀 Server started on port ${PORT}`);
-    console.log(`📱 Memory limit: 512MB`);
-    console.log(`💾 Auth path: ./.wwebjs_auth`);
 });
