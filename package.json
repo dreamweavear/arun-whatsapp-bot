@@ -7,11 +7,11 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "6.3.1",  // OLDER VERSION (CommonJS)
+    "@whiskeysockets/baileys": "6.3.1",
     "qrcode-terminal": "^0.12.0",
     "express": "^4.18.2"
   },
   "engines": {
-    "node": "18.x"  // Downgrade to Node 18
+    "node": "18.x"
   }
 }

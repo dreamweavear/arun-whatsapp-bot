@@ -6,10 +6,10 @@ providers:
 phases:
   setup:
     nixPkgs:
-      - nodejs_18  # Node 18 use karo
+      - nodejs_18
   install:
     cmds:
       - npm install
   build:
     cmds:
-      - echo "✅ Bot with Node 18 and Baileys 6.3.1"
+      - echo "✅ WhatsApp Bot ready"
