@@ -1,217 +1,125 @@
-// server.js - OPTIMIZED FOR RAILWAY
+// server.js - BAILEYS VERSION (NO PUPPETEER)
 const express = require('express');
-const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const qrcode = require('qrcode-terminal');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 app.use(express.json());
 
-// Memory optimization
-let client = null;
+const PORT = process.env.PORT || 3000;
+let sock = null;
 let qrCode = null;
 let isReady = false;
-let restartCount = 0;
 
-// Function to start WhatsApp with memory limits
-function startWhatsApp() {
-    console.log(`🚀 Starting WhatsApp Bot (Attempt: ${restartCount + 1})`);
+// WhatsApp connection function
+async function connectToWhatsApp() {
+    console.log('🚀 Starting WhatsApp Bot (Baileys)');
     
-    // Clear previous client if exists
-    if (client) {
-        try {
-            client.destroy();
-        } catch (e) {}
-        client = null;
-    }
+    const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
+    const { version } = await fetchLatestBaileysVersion();
     
-    // Create new client with optimized settings
-    client = new Client({
-        authStrategy: new LocalAuth({
-            clientId: "arun-computer",
-            dataPath: "./.wwebjs_auth"  // Smaller path
-        }),
-            // server.js - COMPLETE PUPPETEER CONFIG REPLACE
-puppeteer: {
-    headless: 'new',
-    args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-gpu',
-        '--disable-extensions',
-        '--disable-software-rasterizer'
-    ],
-    // REMOVE executablePath COMPLETELY
-    // Let puppeteer handle browser detection
-    ignoreDefaultArgs: ['--disable-extensions', '--enable-automation'],
-    timeout: 60000
-},
-
-
-
-        webVersionCache: {
-            type: 'remote',
-            remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
+    sock = makeWASocket({
+        version,
+        printQRInTerminal: false,
+        auth: state,
+        defaultQueryTimeoutMs: 60_000
+    });
+    
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect, qr } = update;
+        
+        if (qr) {
+            qrCode = qr;
+            console.log('📱 QR Code received:');
+            qrcode.generate(qr, { small: true });
+        }
+        
+        if (connection === 'open') {
+            isReady = true;
+            console.log('✅ WhatsApp Connected!');
+        }
+        
+        if (connection === 'close') {
+            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('❌ Connection closed:', lastDisconnect?.error);
+            
+            if (shouldReconnect) {
+                console.log('🔄 Reconnecting...');
+                setTimeout(connectToWhatsApp, 5000);
+            }
         }
     });
-
-    // QR Code event
-    client.on('qr', async (qr) => {
-        console.log('📱 QR Code received');
-        qrCode = await qrcode.toDataURL(qr);
-        console.log('✅ QR Code generated. Scan with WhatsApp.');
-    });
-
-    // Ready event
-    client.on('ready', () => {
-        isReady = true;
-        console.log('✅ WhatsApp Connected! Bot is ready.');
-        restartCount = 0; // Reset restart count on success
-    });
-
-    // Disconnected event
-    client.on('disconnected', (reason) => {
-        console.log('❌ WhatsApp disconnected:', reason);
-        isReady = false;
+    
+    sock.ev.on('creds.update', saveCreds);
+    
+    // Message handler
+    sock.ev.on('messages.upsert', async (m) => {
+        const msg = m.messages[0];
+        if (!msg.message || msg.key.fromMe) return;
         
-        // Auto-restart after 5 seconds
-        setTimeout(() => {
-            if (restartCount < 3) { // Max 3 retries
-                restartCount++;
-                startWhatsApp();
-            }
-        }, 5000);
-    });
-
-    // Error event
-    client.on('auth_failure', (msg) => {
-        console.error('❌ Auth failure:', msg);
-    });
-
-    // Initialize
-    client.initialize().catch(err => {
-        console.error('❌ Initialization failed:', err);
+        const text = msg.message.conversation || 
+                    msg.message.extendedTextMessage?.text || 
+                    msg.message.imageMessage?.caption || '';
+        
+        const sender = msg.key.remoteJid;
+        console.log(`📩 From: ${sender}, Message: ${text}`);
+        
+        // Auto-reply
+        if (text.toLowerCase().includes('hello') || text.toLowerCase().includes('hi')) {
+            await sock.sendMessage(sender, { text: 'Hello! Welcome to Arun Computer Center. How can I help you?' });
+        }
     });
 }
 
-// Start WhatsApp
-startWhatsApp();
-
-// ========== API ENDPOINTS ==========
-
-// Health check (simple response)
+// API Endpoints
 app.get('/', (req, res) => {
-    res.json({ 
-        app: 'Arun Computer WhatsApp Bot',
-        status: isReady ? 'Connected' : 'Connecting...',
-        memory: process.memoryUsage().rss / 1024 / 1024 + ' MB',
-        uptime: process.uptime() + ' seconds'
+    res.json({
+        app: 'Arun Computer WhatsApp Bot (Baileys)',
+        status: isReady ? 'Connected' : 'Disconnected',
+        qr_available: !!qrCode,
+        uptime: process.uptime() + ' seconds',
+        memory: (process.memoryUsage().rss / 1024 / 1024).toFixed(2) + ' MB'
     });
 });
 
-// Status endpoint
-app.get('/status', (req, res) => {
-    res.json({ 
-        ready: isReady,
-        qr_available: qrCode !== null,
-        restarts: restartCount
-    });
-});
-
-// Get QR Code
 app.get('/qr', (req, res) => {
     if (qrCode) {
-        res.json({ qr: qrCode, ready: isReady });
-    } else {
-        res.json({ 
-            qr: null, 
-            ready: false, 
-            message: 'QR Code generating. Wait 10 seconds and refresh.' 
+        qrcode.generate(qrCode, { small: true }, (qrcode) => {
+            res.send(`<pre>${qrcode}</pre>`);
         });
+    } else {
+        res.json({ qr: null, message: 'No QR generated yet. Wait 10 seconds.' });
     }
 });
 
-// Send message (with timeout)
 app.post('/send', async (req, res) => {
     try {
         const { phone, message } = req.body;
         
         if (!phone || !message) {
-            return res.status(400).json({
-                success: false,
-                error: 'Phone and message are required'
-            });
+            return res.status(400).json({ error: 'Phone and message required' });
         }
         
         if (!isReady) {
-            return res.status(400).json({
-                success: false,
-                error: 'WhatsApp is not connected. Scan QR code first.'
-            });
+            return res.status(400).json({ error: 'WhatsApp not connected' });
         }
         
-        // Format phone number (simple)
-        let formattedPhone = phone.toString().replace(/\D/g, '');
-        if (formattedPhone.startsWith('91') && formattedPhone.length > 10) {
-            formattedPhone = formattedPhone.substring(2);
-        }
+        const formattedPhone = phone.replace(/\D/g, '') + '@s.whatsapp.net';
+        await sock.sendMessage(formattedPhone, { text: message });
         
-        const chatId = `${formattedPhone}@c.us`;
-        
-        console.log(`📤 Sending to: ${formattedPhone.substring(0, 3)}...`);
-        
-        // Send with timeout
-        const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Timeout after 10 seconds')), 10000);
-        });
-        
-        const sendPromise = client.sendMessage(chatId, message.substring(0, 1000)); // Limit message length
-        
-        await Promise.race([sendPromise, timeoutPromise]);
-        
-        console.log('✅ Message sent successfully');
-        
-        res.json({
-            success: true,
-            message: 'WhatsApp message sent successfully'
-        });
-        
+        res.json({ success: true, message: 'Sent successfully' });
     } catch (error) {
-        console.error('❌ Send Error:', error.message);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
+        res.status(500).json({ error: error.message });
     }
 });
 
-// Health check for Railway
-app.get('/health', (req, res) => {
-    const memoryUsage = process.memoryUsage();
-    const memoryMB = memoryUsage.rss / 1024 / 1024;
-    
-    res.json({
-        status: memoryMB < 400 ? 'healthy' : 'warning', // Alert if memory > 400MB
-        timestamp: new Date().toISOString(),
-        memory: Math.round(memoryMB) + ' MB',
-        uptime: Math.round(process.uptime()) + ' seconds',
-        whatsapp: isReady ? 'connected' : 'disconnected'
-    });
-});
-
-// Simple ping endpoint (for uptime robots)
-app.get('/ping', (req, res) => {
-    res.send('pong');
-});
-
-// Start server
-const PORT = process.env.PORT || 3000;
+// Start server and WhatsApp
 app.listen(PORT, () => {
     console.log(`🚀 Server started on port ${PORT}`);
-    console.log(`📱 Memory limit: 512MB`);
-    console.log(`💾 Auth path: ./.wwebjs_auth`);
+    console.log(`📱 Using Baileys library (no puppeteer)`);
+    console.log(`💾 Auth path: ./auth_info`);
+    
+    connectToWhatsApp();
 });
