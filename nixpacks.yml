@@ -6,32 +6,26 @@ providers:
 phases:
   setup:
     nixPkgs:
-      # Essential packages for WhatsApp Web
-      - nss
-      - nspr
-      - atk
-      - at-spi2-atk
-      - cups
-      - dbus
-      - gtk3
-      - xorg.libX11
-      - xorg.libxcb
-      - xorg.libXcomposite
-      - xorg.libXdamage
-      - xorg.libXext
-      - xorg.libXfixes
-      - xorg.libXi
-      - xorg.libXrandr
-      - alsa-lib
-      - pango
-      - cairo
-      - libdrm
-      - mesa
-      # Lightweight chromium dependencies
+      - nodejs_18
       - chromium
+      - puppeteer
+      - libnss3
+      - libatk1.0-0
+      - libatk-bridge2.0-0
+      - libx11-xcb1
+      - libxcomposite1
+      - libxdamage1
+      - libxrandr2
+      - libgbm1
+      - libasound2
+      - libpangocairo-1.0-0
+      - libpango-1.0-0
+      - libcairo2
+      - libgdk-pixbuf2.0-0
   install:
     cmds:
-      - npm install --production
+      - npm install
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm install puppeteer
   build:
     cmds:
-      - echo "✅ Build completed for WhatsApp Bot"
+      - echo "✅ WhatsApp Bot ready for Railway"

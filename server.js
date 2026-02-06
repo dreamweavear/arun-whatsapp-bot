@@ -30,21 +30,30 @@ function startWhatsApp() {
             clientId: "arun-computer",
             dataPath: "./.wwebjs_auth"  // Smaller path
         }),
-        puppeteer: {
-            headless: true,
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',  // Uses less memory
-                '--disable-accelerated-2d-canvas',
-                '--no-first-run',
-                '--no-zygote',
-                '--single-process',  // Single process saves memory
-                '--disable-gpu',
-                '--max-old-space-size=256'  // Limit Node.js memory
-            ],
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
+            puppeteer: {
+                headless: 'new',
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--disable-gpu',
+                    '--single-process',
+                    '--disable-features=AudioService',
+                    '--disable-background-timer-throttling',
+                    '--disable-backgrounding-occluded-windows',
+                    '--disable-renderer-backgrounding',
+                    '--window-size=1920,1080'
+                ],
+                executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+                ignoreDefaultArgs: ['--disable-extensions'],
+                timeout: 60000
         },
+
+
+
         webVersionCache: {
             type: 'remote',
             remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
