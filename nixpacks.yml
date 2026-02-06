@@ -1,4 +1,3 @@
-# COPY-PASTE YEH COMPLETE FILE
 version: 1
 
 providers:
@@ -8,12 +7,12 @@ phases:
   setup:
     nixPkgs:
       - nodejs_18
-      - chromium
-      - puppeteer
+      # REMOVE chromium from here
+      # Puppeteer will download its own
       - libnss3
       - libatk1.0-0
       - libatk-bridge2.0-0
-      - libcups2
+      - libx11
       - libxcomposite1
       - libxdamage1
       - libxrandr2
@@ -21,7 +20,8 @@ phases:
       - libasound2
   install:
     cmds:
-      - npm install
+      # Let puppeteer download chromium
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=false npm install
   build:
     cmds:
-      - echo "✅ WhatsApp Bot ready for Railway"
+      - echo "✅ Puppeteer will download chromium"

@@ -30,7 +30,8 @@ function startWhatsApp() {
             clientId: "arun-computer",
             dataPath: "./.wwebjs_auth"  // Smaller path
         }),
-            puppeteer: {
+            // server.js - COMPLETE PUPPETEER CONFIG REPLACE
+puppeteer: {
     headless: 'new',
     args: [
         '--no-sandbox',
@@ -40,11 +41,14 @@ function startWhatsApp() {
         '--no-first-run',
         '--no-zygote',
         '--single-process',
-        '--disable-gpu'
+        '--disable-gpu',
+        '--disable-extensions',
+        '--disable-software-rasterizer'
     ],
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
-    ignoreDefaultArgs: ['--disable-extensions'],
-    timeout: 30000
+    // REMOVE executablePath COMPLETELY
+    // Let puppeteer handle browser detection
+    ignoreDefaultArgs: ['--disable-extensions', '--enable-automation'],
+    timeout: 60000
 },
 
 
