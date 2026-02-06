@@ -1,9 +1,11 @@
-// server.js - BAILEYS VERSION (NO PUPPETEER)
+// ADD AT THE VERY TOP OF server.js
+const crypto = require('crypto');
+global.crypto = crypto;
+
 const express = require('express');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
-const path = require('path');
 
 const app = express();
 app.use(express.json());
@@ -15,16 +17,17 @@ let isReady = false;
 
 // WhatsApp connection function
 async function connectToWhatsApp() {
-    console.log('🚀 Starting WhatsApp Bot (Baileys)');
+    console.log('🚀 Starting WhatsApp Bot (Baileys with Crypto fix)');
     
-    const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
+    const { state, saveCreds } = await useMultiFileAuthState('./auth_info_baileys');
     const { version } = await fetchLatestBaileysVersion();
     
     sock = makeWASocket({
         version,
-        printQRInTerminal: false,
+        printQRInTerminal: true,
         auth: state,
-        defaultQueryTimeoutMs: 60_000
+        defaultQueryTimeoutMs: 60_000,
+        browser: ['Arun Computer Bot', 'Chrome', '1.0.0']
     });
     
     sock.ev.on('connection.update', (update) => {
@@ -32,22 +35,22 @@ async function connectToWhatsApp() {
         
         if (qr) {
             qrCode = qr;
-            console.log('📱 QR Code received:');
+            console.log('📱 QR Code received - Scan with WhatsApp:');
             qrcode.generate(qr, { small: true });
         }
         
         if (connection === 'open') {
             isReady = true;
-            console.log('✅ WhatsApp Connected!');
+            console.log('✅ WhatsApp Connected Successfully!');
         }
         
         if (connection === 'close') {
             const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('❌ Connection closed:', lastDisconnect?.error);
+            console.log('Connection closed due to:', lastDisconnect?.error?.message || 'unknown');
             
             if (shouldReconnect) {
-                console.log('🔄 Reconnecting...');
-                setTimeout(connectToWhatsApp, 5000);
+                console.log('🔄 Reconnecting in 3 seconds...');
+                setTimeout(connectToWhatsApp, 3000);
             }
         }
     });
@@ -64,11 +67,13 @@ async function connectToWhatsApp() {
                     msg.message.imageMessage?.caption || '';
         
         const sender = msg.key.remoteJid;
-        console.log(`📩 From: ${sender}, Message: ${text}`);
+        console.log(`📩 Message from ${sender}: ${text.substring(0, 50)}...`);
         
-        // Auto-reply
+        // Auto-reply for testing
         if (text.toLowerCase().includes('hello') || text.toLowerCase().includes('hi')) {
-            await sock.sendMessage(sender, { text: 'Hello! Welcome to Arun Computer Center. How can I help you?' });
+            await sock.sendMessage(sender, { 
+                text: 'Namaste! Welcome to Arun Computer Center.\nI am your admission assistant. How can I help you?' 
+            });
         }
     });
 }
@@ -76,50 +81,96 @@ async function connectToWhatsApp() {
 // API Endpoints
 app.get('/', (req, res) => {
     res.json({
-        app: 'Arun Computer WhatsApp Bot (Baileys)',
-        status: isReady ? 'Connected' : 'Disconnected',
+        app: 'Arun Computer WhatsApp Bot',
+        status: isReady ? 'Connected ✅' : 'Disconnected ❌',
         qr_available: !!qrCode,
-        uptime: process.uptime() + ' seconds',
-        memory: (process.memoryUsage().rss / 1024 / 1024).toFixed(2) + ' MB'
+        uptime: Math.round(process.uptime()) + ' seconds',
+        memory: (process.memoryUsage().rss / 1024 / 1024).toFixed(2) + ' MB',
+        note: 'Scan QR at /qr endpoint'
     });
 });
 
 app.get('/qr', (req, res) => {
     if (qrCode) {
         qrcode.generate(qrCode, { small: true }, (qrcode) => {
-            res.send(`<pre>${qrcode}</pre>`);
+            res.send(`
+                <html>
+                <head><title>Arun Computer Bot - QR Code</title></head>
+                <body style="text-align:center; padding:20px;">
+                    <h2>📱 Scan QR Code with WhatsApp</h2>
+                    <pre style="font-size:8px; line-height:1;">${qrcode}</pre>
+                    <p>1. Open WhatsApp Mobile<br>2. Tap Settings → Linked Devices<br>3. Tap Link a Device<br>4. Scan this QR code</p>
+                    <p>Status: ${isReady ? '✅ Connected' : '⏳ Waiting for scan'}</p>
+                </body>
+                </html>
+            `);
         });
     } else {
-        res.json({ qr: null, message: 'No QR generated yet. Wait 10 seconds.' });
+        res.json({ 
+            qr: null, 
+            message: 'QR code not generated yet. Wait 10-15 seconds and refresh.',
+            status: 'initializing' 
+        });
     }
 });
 
+// Send message API (for website integration)
 app.post('/send', async (req, res) => {
     try {
         const { phone, message } = req.body;
         
         if (!phone || !message) {
-            return res.status(400).json({ error: 'Phone and message required' });
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Phone number and message required' 
+            });
         }
         
         if (!isReady) {
-            return res.status(400).json({ error: 'WhatsApp not connected' });
+            return res.status(400).json({ 
+                success: false, 
+                error: 'WhatsApp not connected. Please scan QR code first.' 
+            });
         }
         
-        const formattedPhone = phone.replace(/\D/g, '') + '@s.whatsapp.net';
+        // Format phone number
+        const cleanedPhone = phone.replace(/\D/g, '');
+        const formattedPhone = cleanedPhone + '@s.whatsapp.net';
+        
+        console.log(`📤 Sending to ${cleanedPhone}: ${message.substring(0, 30)}...`);
+        
         await sock.sendMessage(formattedPhone, { text: message });
         
-        res.json({ success: true, message: 'Sent successfully' });
+        res.json({ 
+            success: true, 
+            message: 'WhatsApp message sent successfully',
+            to: cleanedPhone
+        });
+        
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('Send error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
     }
 });
 
-// Start server and WhatsApp
+// Health check
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        whatsapp: isReady ? 'connected' : 'disconnected'
+    });
+});
+
+// Start server
 app.listen(PORT, () => {
     console.log(`🚀 Server started on port ${PORT}`);
-    console.log(`📱 Using Baileys library (no puppeteer)`);
-    console.log(`💾 Auth path: ./auth_info`);
+    console.log(`🌐 Open: http://localhost:${PORT}`);
+    console.log(`📱 QR Code: http://localhost:${PORT}/qr`);
     
-    connectToWhatsApp();
+    // Start WhatsApp connection
+    setTimeout(connectToWhatsApp, 2000);
 });

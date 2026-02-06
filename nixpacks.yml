@@ -6,10 +6,10 @@ providers:
 phases:
   setup:
     nixPkgs:
-      - nodejs_18
+      - nodejs_20  # Upgrade to Node 20
   install:
     cmds:
       - npm install
   build:
     cmds:
-      - echo "✅ WhatsApp Bot with Baileys ready"
+      - echo "✅ Bot with Node 20 and crypto fix ready"
